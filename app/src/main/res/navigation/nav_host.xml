@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            xmlns:tools="http://schemas.android.com/tools" android:id="@+id/nav_host"
+            app:startDestination="@id/taskList">
+
+    <fragment android:id="@+id/taskList" android:name="com.example.finaltodo.TaskList"
+              android:label="fragment_task_list" tools:layout="@layout/fragment_task_list">
+        <action android:id="@+id/action_taskList_to_taskMain" app:destination="@id/taskMain"/>
+
+    </fragment>
+    <fragment android:id="@+id/taskMain" android:name="com.example.finaltodo.TaskMain"
+              android:label="fragment_task_main" tools:layout="@layout/fragment_task_main"/>
+</navigation>
