@@ -2,6 +2,7 @@ package com.example.finaltodo
 
 import android.app.DatePickerDialog
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
@@ -10,10 +11,11 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.os.bundleOf
-import androidx.navigation.Navigation
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.finaltodo.data.TaskViewModel
 import com.example.finaltodo.databinding.FragmentTaskListBinding
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -25,6 +27,7 @@ class TaskList : Fragment() {
     lateinit var recyclerView: RecyclerView
     lateinit var adapter: MyAdapter
     private lateinit var binding: FragmentTaskListBinding
+    lateinit var mTaskViewModel: TaskViewModel
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -35,21 +38,26 @@ class TaskList : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         binding=FragmentTaskListBinding.inflate(layoutInflater, container, false)
+        mTaskViewModel = ViewModelProvider(this).get(TaskViewModel::class.java)
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        tasks = arrayListOf(Task("First Task", "Description", LocalDate.now()))
+        tasks = arrayListOf()
         recyclerView = binding.listOfTasks
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.setHasFixedSize(false)
         adapter = MyAdapter(tasks)
         recyclerView.adapter = adapter
-        adapter.setOnItemClickListener(object : MyAdapter.onItemClickListener{
+
+        mTaskViewModel.readAllData.observe(viewLifecycleOwner, androidx.lifecycle.Observer {
+            task -> adapter.setData(task)
+        })
+
+        adapter.setOnItemClickListener(object : MyAdapter.OnItemClickListener{
             override fun onItemClick(position: Int){
                 //Make the change from fragment A to fragment B
-                Toast.makeText(context, "You see the $position task", Toast.LENGTH_SHORT).show()
                 val bundle = bundleOf(
                     "Title" to adapter.tasksList[position].title,
                     "Description" to adapter.tasksList[position].description,
@@ -58,13 +66,40 @@ class TaskList : Fragment() {
                 findNavController().navigate(R.id.action_taskList_to_taskMain, bundle)
             }
         })
-        adapter.setOnEditClickListener(object : MyAdapter.onEditClickListener{
+
+        adapter.setOnEditClickListener(object : MyAdapter.OnEditClickListener{
             override fun onEditClick(position: Int) {
-                showEdittask(tasks[position], position)
+
+                showEditTask(adapter.tasksList[position], position)
+            }
+        })
+
+        adapter.setOnDeleteClickListener(object  : MyAdapter.OnDeleteClickListener{
+            override fun onDeleteClick(position: Int) {
+                val task = adapter.tasksList[position]
+                val deletedTask: com.example.finaltodo.data.Task =
+                    com.example.finaltodo.data.Task(task.id, task.title, task.description, task.deadline.toString())
+                mTaskViewModel.deleteTask(deletedTask)
+                adapter.delete(position)
             }
         })
         showAddTask()
+        binding.fabDeleteAll.setOnClickListener{
+            showDeleteAll()
+        }
+    }
 
+    private fun showDeleteAll() {
+        val builder = AlertDialog.Builder(requireContext())
+        builder.setPositiveButton("Yes"){_, _->
+            mTaskViewModel.deleteAllTasks()
+            Toast.makeText(context, "Deleted All Active Tasks", Toast.LENGTH_SHORT).show()
+        }
+
+        builder.setNegativeButton("No"){_, _->}
+        builder.setTitle("Delete All tasks")
+        builder.setMessage("Are you sure you want to clear all tasks?")
+        builder.create().show()
     }
 
     private fun showAddTask(){
@@ -129,8 +164,10 @@ class TaskList : Fragment() {
                     if(title.isEmpty() || desc.isEmpty() || deadline.toString().isEmpty()){
                         Toast.makeText(context, "Fill all required fields", Toast.LENGTH_SHORT).show()
                     }else{
-                        var newTask: Task
-                        newTask = Task(title, desc, deadline)
+                        val databaseTask: com.example.finaltodo.data.Task =
+                            com.example.finaltodo.data.Task(0, title, desc, deadline.toString())
+                        mTaskViewModel.addTask(databaseTask)
+                        val newTask: Task = Task(databaseTask.id, title, desc, deadline)
                         adapter.addTask(newTask)
                         taskCreateDialog.dismiss()
                     }
@@ -140,7 +177,8 @@ class TaskList : Fragment() {
         }
     }
 
-    private fun showEdittask(task: Task, pos: Int){
+    private fun showEditTask(task: Task, pos: Int){
+        Log.d("Test", "Reached Inside Edit Dialog")
         val builder = AlertDialog.Builder(requireContext())
         val inflater = layoutInflater
         val dialogLayout = inflater.inflate(R.layout.task_input, null)
@@ -148,7 +186,7 @@ class TaskList : Fragment() {
         val titleView: TextView = dialogLayout.findViewById(R.id.input_task_title)
         val descView: TextView = dialogLayout.findViewById(R.id.input_task_desc)
         val deadlineView: TextView = dialogLayout.findViewById(R.id.input_task_deadline)
-        var deadline: LocalDate = LocalDate.now()
+        var deadline: LocalDate = task.deadline
         deadlineView.setOnClickListener(){
             val c = Calendar.getInstance()
 
@@ -179,15 +217,13 @@ class TaskList : Fragment() {
                 )
             }
 
-            if (datePickerDialog != null) {
-                datePickerDialog.show()
-            }
+            datePickerDialog?.show()
         }
         with(builder){
-            setTitle("Enter User Info")
+            setTitle("Update User Info")
             setPositiveButton("Edit Task", null)
 
-            setNegativeButton("Cancel"){ dialog, which-> dialog.cancel() }
+            setNegativeButton("Cancel"){ dialog, _ -> dialog.cancel() }
         }
         titleView.text = task.title
         descView.text = task.description
@@ -195,6 +231,7 @@ class TaskList : Fragment() {
         deadlineView.text = task.deadline.format(formatter)
         val taskCreateDialog = builder.create()
         taskCreateDialog.setOnShowListener{
+
             val positiveButton = taskCreateDialog.getButton(AlertDialog.BUTTON_POSITIVE)
             positiveButton.setOnClickListener{
                 val title =titleView.text.toString()
@@ -204,7 +241,11 @@ class TaskList : Fragment() {
                 if(title.isEmpty() || desc.isEmpty() || deadline.toString().isEmpty()){
                     Toast.makeText(context, "Fill all required fields", Toast.LENGTH_SHORT).show()
                 }else{
-                    adapter.tasksList[pos] = Task(title, desc, deadline)
+                    val updatedTask: com.example.finaltodo.data.Task =
+                        com.example.finaltodo.data.Task(task.id, title, desc, deadline.toString())
+                    mTaskViewModel.updateTask(updatedTask)
+
+                    adapter.tasksList[pos] = Task(task.id, title, desc, deadline)
                     adapter.notifyDataSetChanged()
                     taskCreateDialog.dismiss()
                 }

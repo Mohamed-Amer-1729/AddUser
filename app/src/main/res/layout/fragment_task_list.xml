@@ -48,5 +48,19 @@
             android:layout_margin="20dp"
     />
 
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/fab_delete_all"
+            android:src="@drawable/baseline_delete_24"
+            android:contentDescription="Delete All tasks"
+            app:iconGravity="end"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:fabCustomSize="56dp"
+            app:maxImageSize="50dp"
+            android:layout_margin="20dp"
+    />
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>
